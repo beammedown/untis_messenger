@@ -9,12 +9,11 @@ from requests import post
 from webuntis.session import Session
 
 
-
 class UntisSess():
     def __init__(self) -> None:
         self.s = Session(
-            username=os.getenv("USER"),
-            password=os.getenv("PASSWORD"),
+            username=os.getenv("UNTIS_USER"),
+            password=os.getenv("UNTIS_PASSWORD"),
             server=os.getenv("URL"),
             school=os.getenv("SCHOOL"),
             useragent=os.getenv("USERAGENT")
@@ -36,7 +35,7 @@ class UntisSess():
     def get_timetable(self, when):
         written = []
         if when == "today":
-            timetable = self.s.timetable(klasse=self.klasse, start=datetime.date.today(), end=datetime.date.today()+ datetime.timedelta(4))
+            timetable = self.s.timetable(klasse=self.klasse, start=datetime.date.today(), end=datetime.date.today())
             with open("timetable.json", "w") as f:
                     f.write("{\n")
                     for j, i in enumerate(timetable): # type: ignore
@@ -74,9 +73,19 @@ class UntisSess():
     def login(self):
         self.s.login()
 
-def create_message():
-    weekdays = { 0: "Montag", 1: "Dienstag", 2: "Mittwoch", 3: "Donnerstag", 4: "Freitag", 5: "Samstag", 6: "Sonntag"}
-    ausfall = "Heute entfallen folgende Stunden:\n"
+def create_message(when):
+    weekdays = { 1: "Montag", 2: "Dienstag", 3: "Mittwoch", 4: "Donnerstag", 5: "Freitag", 6: "Samstag", 7: "Sonntag"}
+    if datetime.datetime.now().isoweekday() == 5:
+        return "Heute ist Freitag, es gibt keine Stunden mehr. Schönes Wochenende!"
+    elif datetime.datetime.now().isoweekday() == 6:
+        return "Heute ist Samstag, es gibt keine Stunden mehr. Schönes Wochenende!"
+    elif when == "today":
+        ausfall = "Heute entfallen folgende Stunden:\n"
+    elif when == "tomorrow":
+        ausfall = "Morgen entfallen folgende Stunden:\n"
+    else:
+        return "Error: Invalid argument"
+
     with open("timetable.json", "r") as file:
         timetable = json.load(file)
     with open("subjects.json", "r") as file:
@@ -106,23 +115,38 @@ def send_telegram(message: str):
         logging.log(level=logging.ERROR, msg="Error message: " + str(req_resp['description']))
 
 def waittimedefine():
-    """Send messages at 7 am and 8pm"""
-    now = datetime.datetime.now()
-    if now.hour < 7:
-        return (7-now.hour)*3600
-    elif now.hour < 20:
-        return (20-now.hour)*3600
+    current_time = datetime.datetime.now()
+    target_time = None
+
+    # Calculate target time for today
+    if current_time.hour < 7 or (current_time.hour == 7 and current_time.minute < 10):
+        target_time = current_time.replace(hour=7, minute=10, second=0, microsecond=0)
+    elif current_time.hour < 20:
+        target_time = current_time.replace(hour=20, minute=0, second=0, microsecond=0)
     else:
-        return (24-now.hour+7)*3600
+        # Calculate target time for tomorrow
+        tomorrow = current_time + datetime.timedelta(days=1)
+        target_time = tomorrow.replace(hour=7, minute=10, second=0, microsecond=0)
+
+    wait_time = (target_time - current_time).total_seconds()
+    return wait_time
 
 def main():
     # obgligated initialisations
     sess = UntisSess()
     sess.get_subjects()
     while True:
-        sess.get_timetable("today")
-        sess.logout()
-        message = create_message()
+        if datetime.datetime.now().hour == 7:
+            sess.login()
+            sess.get_timetable("today")
+            sess.logout()
+            message = create_message("today")
+        else:
+            sess.login()
+            sess.get_timetable("tomorrow")
+            sess.logout()
+            message = create_message("tomorrow")
+
         send_telegram(message)
         waittime = waittimedefine()
         logging.log(level=logging.INFO, msg=f"Waiting {waittime} seconds")
@@ -132,3 +156,5 @@ if __name__ == "__main__":
     dotenv.load_dotenv()
     logging.basicConfig(filename='untis_ms.log', filemode="a", level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
     main()
+    
+    
