@@ -62,10 +62,14 @@ class UntisSess():
                                 f.write(f'  "{j}":'+str(i).replace("'",'"')+",\n")
                                 written.append(j)
 
-            with open("timetable.json", "r") as f:
-                read_data = f.read()
-            with open("timetable.json", "w") as f:
-                f.write(read_data[:-2] + "\n}")
+            if len(written) == 0:
+                with open("timetable.json", "a") as f:
+                    f.write("}")
+            else:
+                with open("timetable.json", "r") as f:
+                    read_data = f.read()
+                with open("timetable.json", "w") as f:
+                    f.write(read_data[:-2] + "\n}")
 
 
     def logout(self):
