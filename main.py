@@ -101,7 +101,7 @@ def create_message(when):
         date = datetime.datetime.strptime(str(timetable[lesson]['date']), '%Y%m%d')
         ausfall += f"{lessonname} bei {teachers[lessonname]} am {weekdays[date.isoweekday()]}, dem {date.strftime('%d%m')}\n"
 
-    if ausfall == "Heute entfallen folgende Stunden:\n":
+    if ausfall == "Heute entfallen folgende Stunden:\n" or ausfall == "Morgen entfallen folgende Stunden:\n":
         ausfall += "Keine"
 
     return ausfall
