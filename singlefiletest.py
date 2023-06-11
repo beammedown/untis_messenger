@@ -4,27 +4,15 @@ import logging
 import os
 from time import sleep
 
-from autologging import logged, traced, TRACE
 import dotenv
-import requests
-import webuntis
+from requests import post
+from webuntis.session import Session
 
-def send_telegram(message: str):
-    req_resp = requests.post(
-    url='https://api.telegram.org/bot{0}/{1}'.format(os.getenv("TELEGRAM_API_TOKEN"), 'sendMessage'),
-    data={'chat_id': os.getenv("CHAT_ID"), 'text': message}
-    ).json()
-
-    if req_resp['ok']:
-        logging.log(level=logging.INFO, msg="Message sent to telegram")
-    else:
-        logging.log(level=logging.ERROR, msg="Message not sent to telegram")
-        logging.log(level=logging.ERROR, msg="Error message: " + str(req_resp['description']))
 
 
 class UntisSess():
     def __init__(self) -> None:
-        self.s = webuntis.Session(
+        self.s = Session(
             username=os.getenv("USER"),
             password=os.getenv("PASSWORD"),
             server=os.getenv("URL"),
@@ -56,6 +44,7 @@ class UntisSess():
                             if j not in written:
                                 f.write(f'  "{j}":'+str(i).replace("'",'"')+",\n")
                                 written.append(j)
+
             if len(written) == 0:
                 open("timetable.json", "a").write("}")
             else:
@@ -95,24 +84,36 @@ def create_message():
     with open("teachers.json", "r") as file:
         teachers = json.load(file)
     for lesson in timetable:
-        lessonname = subjects[lesson['su']['id']]
-        date = datetime.datetime.strptime(lesson['date'], '%Y%m%d')
-        ausfall += f"{lessonname} bei {teachers[lessonname]} am {weekdays[date.weekday]}, dem {date.strftime('%d%m')}\n"
+        lessonname = subjects[str(timetable[lesson]['su'][0]['id'])]
+        date = datetime.datetime.strptime(str(timetable[lesson]['date']), '%Y%m%d')
+        ausfall += f"{lessonname} bei {teachers[lessonname]} am {weekdays[date.isoweekday()]}, dem {date.strftime('%d%m')}\n"
 
     if ausfall == "Heute entfallen folgende Stunden:\n":
         ausfall += "Keine"
 
     return ausfall
 
+def send_telegram(message: str):
+    req_resp = post(
+    url='https://api.telegram.org/bot{0}/{1}'.format(os.getenv("TELEGRAM_API_TOKEN"), 'sendMessage'),
+    data={'chat_id': os.getenv("CHAT_ID"), 'text': message}
+    ).json()
+
+    if req_resp['ok']:
+        logging.log(level=logging.INFO, msg="Message sent to telegram")
+    else:
+        logging.log(level=logging.ERROR, msg="Message not sent to telegram")
+        logging.log(level=logging.ERROR, msg="Error message: " + str(req_resp['description']))
 
 def waittimedefine():
+    """Send messages at 7 am and 8pm"""
     now = datetime.datetime.now()
     if now.hour < 7:
-        return 60 * 60 * (7 - now.hour)
-    elif now.hour > 17:
-        return 60 * 60 * (24 - now.hour + 7)
+        return (7-now.hour)*3600
+    elif now.hour < 20:
+        return (20-now.hour)*3600
     else:
-        return 60 * 60 * 2
+        return (24-now.hour+7)*3600
 
 def main():
     # obgligated initialisations
@@ -121,8 +122,11 @@ def main():
     while True:
         sess.get_timetable("today")
         sess.logout()
-        send_telegram(create_message())
-        sleep(waittimedefine())
+        message = create_message()
+        send_telegram(message)
+        waittime = waittimedefine()
+        logging.log(level=logging.INFO, msg=f"Waiting {waittime} seconds")
+        sleep(waittime)
 
 if __name__ == "__main__":
     dotenv.load_dotenv()
