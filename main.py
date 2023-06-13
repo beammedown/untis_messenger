@@ -11,15 +11,23 @@ from webuntis.session import Session
 
 class UntisSess():
     def __init__(self) -> None:
-        self.s = Session(
-            username=os.getenv("UNTIS_USER"),
-            password=os.getenv("UNTIS_PASSWORD"),
-            server=os.getenv("URL"),
-            school=os.getenv("SCHOOL"),
-            useragent=os.getenv("USERAGENT")
-        ).login()
+        try:
+            self.s = Session(
+                username=os.getenv("UNTIS_USER"),
+                password=os.getenv("UNTIS_PASSWORD"),
+                server=os.getenv("URL"),
+                school=os.getenv("SCHOOL"),
+                useragent=os.getenv("USERAGENT")
+            ).login()
 
-        self.klasse = int(os.getenv("CLASS_ID")) # type: ignore
+            if os.getenv("CLASS_ID") != None:
+                self.klasse = int(os.getenv("CLASS_ID")) # type: ignore
+            else:
+                exit("Error: No class id specified | set in .env to continue | exiting...")
+
+        except Exception as e:
+            logging.log(level=logging.ERROR, msg="Error while logging in: " + str(e))
+
 
     def get_subjects(self):
         subjects = self.s.subjects()
@@ -33,49 +41,61 @@ class UntisSess():
             f.write(read_data[:-2] + "\n}")
 
     def get_timetable(self, when):
-        written = []
-        if when == "today":
-            timetable = self.s.timetable(klasse=self.klasse, start=datetime.date.today(), end=datetime.date.today())
-            with open("timetable.json", "w") as f:
-                    f.write("{\n")
-                    for j, i in enumerate(timetable): # type: ignore
-                        if i.code == "cancelled":
-                            if j not in written:
-                                f.write(f'  "{j}":'+str(i).replace("'",'"')+",\n")
-                                written.append(j)
-
-            if len(written) == 0:
-                open("timetable.json", "a").write("}")
-            else:
-                with open("timetable.json", "r") as f:
-                    read_data = f.read()
+        try:
+            written = []
+            if when == "today":
+                timetable = self.s.timetable(klasse=self.klasse, start=datetime.date.today(), end=datetime.date.today())
                 with open("timetable.json", "w") as f:
-                    f.write(read_data[:-2] + "\n}")
+                        f.write("{\n")
+                        for j, i in enumerate(timetable): # type: ignore
+                            if i.code == "cancelled":
+                                if j not in written:
+                                    f.write(f'  "{j}":'+str(i).replace("'",'"')+",\n")
+                                    written.append(j)
 
-        elif when == "tomorrow":
-            timetable = self.s.timetable(klasse=self.klasse, start=datetime.date.today()+datetime.timedelta(1), end=datetime.date.today()+datetime.timedelta(1))
-            with open("timetable.json", "w") as f:
-                    f.write("{\n")
-                    for j, i in enumerate(timetable): # type: ignore
-                        if i.code == "cancelled":
-                            if j not in written:
-                                f.write(f'  "{j}":'+str(i).replace("'",'"')+",\n")
-                                written.append(j)
+                if len(written) == 0:
+                    open("timetable.json", "a").write("}")
+                else:
+                    with open("timetable.json", "r") as f:
+                        read_data = f.read()
+                    with open("timetable.json", "w") as f:
+                        f.write(read_data[:-2] + "\n}")
 
-            if len(written) == 0:
-                with open("timetable.json", "a") as f:
-                    f.write("}")
-            else:
-                with open("timetable.json", "r") as f:
-                    read_data = f.read()
+            elif when == "tomorrow":
+                timetable = self.s.timetable(klasse=self.klasse, start=datetime.date.today()+datetime.timedelta(1), end=datetime.date.today()+datetime.timedelta(1))
                 with open("timetable.json", "w") as f:
-                    f.write(read_data[:-2] + "\n}")
+                        f.write("{\n")
+                        for j, i in enumerate(timetable): # type: ignore
+                            if i.code == "cancelled":
+                                if j not in written:
+                                    f.write(f'  "{j}":'+str(i).replace("'",'"')+",\n")
+                                    written.append(j)
 
+                if len(written) == 0:
+                    with open("timetable.json", "a") as f:
+                        f.write("}")
+                else:
+                    with open("timetable.json", "r") as f:
+                        read_data = f.read()
+                    with open("timetable.json", "w") as f:
+                        f.write(read_data[:-2] + "\n}")
+
+        except Exception as e:
+            logging.log(level=logging.ERROR, msg="Error while getting timetable: " + str(e))
 
     def logout(self):
-        self.s.logout()
+        try:
+            self.s.logout()
+        except Exception as e:
+            logging.log(level=logging.ERROR, msg="Error while logging out: " + str(e))
+            return "Error"
+
     def login(self):
-        self.s.login()
+        try:
+            self.s.login()
+        except Exception as e:
+            logging.log(level=logging.ERROR, msg="Error while logging in: " + str(e))
+            return "Error"
 
 def create_message(when):
     weekdays = { 1: "Montag", 2: "Dienstag", 3: "Mittwoch", 4: "Donnerstag", 5: "Freitag", 6: "Samstag", 7: "Sonntag"}
@@ -136,17 +156,30 @@ def waittimedefine():
     return wait_time
 
 def main():
+    reqenvvars = ["TELEGRAM_API_TOKEN", "CHAT_ID", "UNTIS_USER", "UNTIS_PASSWORD", "SCHOOL", "CLASS_ID", "URL", "USERAGENT"]
+    for i in reqenvvars:
+        if i not in os.environ:
+            logging.log(level=logging.ERROR, msg=f"Environment variable {i} not set")
+            exit(f"Environment variable {i} not set")
     # obgligated initialisations
     sess = UntisSess()
     sess.get_subjects()
     while True:
         if datetime.datetime.now().hour == 7:
-            sess.login()
+            l = sess.login()
+            if l == "Error":
+                logging.log(level=logging.ERROR, msg="Error while logging in")
+                sleep(60)
+                continue
             sess.get_timetable("today")
             sess.logout()
             message = create_message("today")
         else:
-            sess.login()
+            l = sess.login()
+            if l == "Error":
+                logging.log(level=logging.ERROR, msg="Error while logging in")
+                sleep(60)
+                continue
             sess.get_timetable("tomorrow")
             sess.logout()
             message = create_message("tomorrow")
@@ -160,5 +193,5 @@ if __name__ == "__main__":
     dotenv.load_dotenv()
     logging.basicConfig(filename='untis_ms.log', filemode="a", level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
     main()
-    
-    
+
+
