@@ -98,11 +98,12 @@ class UntisSess():
             return "Error"
 
 def create_message(when):
+    hours = {750: "1.", 840: "2.", 940: "3.", 1030: "4.", 1130: "5.", 1220: "6.", 1335: "7.", 1415: "8.", 1505: "9.", 1545: "10.", 1625: "11.", 1705: "12."}
     weekdays = { 1: "Montag", 2: "Dienstag", 3: "Mittwoch", 4: "Donnerstag", 5: "Freitag", 6: "Samstag", 7: "Sonntag"}
-    if datetime.datetime.now().isoweekday() == 5:
+    if datetime.datetime.now().isoweekday() == 5 and datetime.datetime.now().hour == 20:
         return "Heute ist Freitag, es gibt keine Stunden mehr. Schönes Wochenende!"
     elif datetime.datetime.now().isoweekday() == 6:
-        return "Heute ist Samstag, es gibt keine Stunden mehr. Schönes Wochenende!"
+        return ""
     elif when == "today":
         ausfall = "Heute entfallen folgende Stunden:\n"
     elif when == "tomorrow":
@@ -118,8 +119,8 @@ def create_message(when):
         teachers = json.load(file)
     for lesson in timetable:
         lessonname = subjects[str(timetable[lesson]['su'][0]['id'])]
-        date = datetime.datetime.strptime(str(timetable[lesson]['date']), '%Y%m%d')
-        ausfall += f"{lessonname} bei {teachers[lessonname]} am {weekdays[date.isoweekday()]}, dem {date.strftime('%d%m')}\n"
+        date = timetable[lesson]['starttime']
+        ausfall += f"{lessonname} bei {teachers[lessonname]} in der {hours[date]} Stunde\n"
 
     if ausfall == "Heute entfallen folgende Stunden:\n" or ausfall == "Morgen entfallen folgende Stunden:\n":
         ausfall += "Keine"
@@ -127,6 +128,9 @@ def create_message(when):
     return ausfall
 
 def send_telegram(message: str):
+    if message == "":
+        logging.log(level=logging.INFO, msg="No message to send")
+        return
     req_resp = post(
     url='https://api.telegram.org/bot{0}/{1}'.format(os.getenv("TELEGRAM_API_TOKEN"), 'sendMessage'),
     data={'chat_id': os.getenv("CHAT_ID"), 'text': message}
@@ -155,6 +159,18 @@ def waittimedefine():
     wait_time = (target_time - current_time).total_seconds()
     return wait_time
 
+def do_send(sess, when):
+    l = sess.login()
+    if l == "Error":
+        logging.log(level=logging.ERROR, msg="Error while logging in")
+        sleep(60)
+        return
+    sess.get_timetable(when)
+    sess.logout()
+    message = create_message(when)
+
+    send_telegram(message)
+
 def main():
     reqenvvars = ["TELEGRAM_API_TOKEN", "CHAT_ID", "UNTIS_USER", "UNTIS_PASSWORD", "SCHOOL", "CLASS_ID", "URL", "USERAGENT"]
     for i in reqenvvars:
@@ -164,27 +180,22 @@ def main():
     # obgligated initialisations
     sess = UntisSess()
     sess.get_subjects()
-    while True:
-        if datetime.datetime.now().hour == 7:
-            l = sess.login()
-            if l == "Error":
-                logging.log(level=logging.ERROR, msg="Error while logging in")
-                sleep(60)
-                continue
-            sess.get_timetable("today")
-            sess.logout()
-            message = create_message("today")
-        else:
-            l = sess.login()
-            if l == "Error":
-                logging.log(level=logging.ERROR, msg="Error while logging in")
-                sleep(60)
-                continue
-            sess.get_timetable("tomorrow")
-            sess.logout()
-            message = create_message("tomorrow")
 
-        send_telegram(message)
+    while True:
+        now = datetime.datetime.now()
+
+        if now.isoweekday() == 6 or (now.isoweekday() == 7 and now.hour == 7):
+            pass
+
+        elif now.isoweekday() == 7 and now.hour > 7:
+            do_send(sess, "tomorrow")
+
+        elif now.hour < 7:
+            do_send(sess, "today")
+
+        else:
+            do_send(sess, "tomorrow")
+
         waittime = waittimedefine()
         logging.log(level=logging.INFO, msg=f"Waiting {waittime} seconds")
         sleep(waittime)
