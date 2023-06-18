@@ -184,13 +184,13 @@ def main():
     while True:
         now = datetime.datetime.now()
 
-        if now.isoweekday() == 6 or (now.isoweekday() == 7 and now.hour == 7):
+        if now.isoweekday() == 6 or (now.isoweekday() == 7 and now.hour < 19):
             pass
 
-        elif now.isoweekday() == 7 and now.hour > 7:
+        elif now.isoweekday() == 7 and now.hour > 20:
             do_send(sess, "tomorrow")
 
-        elif now.hour < 7:
+        elif now.hour == 7:
             do_send(sess, "today")
 
         else:
