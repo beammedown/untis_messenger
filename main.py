@@ -119,7 +119,7 @@ def create_message(when):
         teachers = json.load(file)
     for lesson in timetable:
         lessonname = subjects[str(timetable[lesson]['su'][0]['id'])]
-        date = timetable[lesson]['starttime']
+        date = timetable[lesson]['startTime']
         ausfall += f"{lessonname} bei {teachers[lessonname]} in der {hours[date]} Stunde\n"
 
     if ausfall == "Heute entfallen folgende Stunden:\n" or ausfall == "Morgen entfallen folgende Stunden:\n":
