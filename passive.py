@@ -5,8 +5,9 @@ import os
 from time import sleep
 
 import dotenv
-from requests import post
+from requests import post, get
 from webuntis.session import Session
+
 
 
 class UntisSess():
@@ -45,7 +46,7 @@ class UntisSess():
             written = []
             if when == "today":
                 timetable = self.s.timetable(klasse=self.klasse, start=datetime.date.today(), end=datetime.date.today())
-                with open("timetable.json", "w") as f:
+                with open(f"{datetime.date.today()}.json", "w") as f:
                         f.write("{\n")
                         f.write(f'  "expand": "{True if datetime.datetime.now().hour == 7 else False}",\n')
                         for j, i in enumerate(timetable): # type: ignore
@@ -64,7 +65,7 @@ class UntisSess():
 
             elif when == "tomorrow":
                 timetable = self.s.timetable(klasse=self.klasse, start=datetime.date.today()+datetime.timedelta(1), end=datetime.date.today()+datetime.timedelta(1))
-                with open("timetable.json", "w") as f:
+                with open(f"{datetime.date.today() + datetime.timedelta(days=1)}.json", "w") as f:
                         f.write("{\n")
                         for j, i in enumerate(timetable): # type: ignore
                             if i.code == "cancelled":
@@ -98,21 +99,16 @@ class UntisSess():
             logging.log(level=logging.ERROR, msg="Error while logging in: " + str(e))
             return "Error"
 
-def create_message(when):
+def create_message():
     hours = {750: "1.", 840: "2.", 940: "3.", 1030: "4.", 1130: "5.", 1220: "6.", 1335: "7.", 1415: "8.", 1505: "9.", 1545: "10.", 1625: "11.", 1705: "12."}
-    weekdays = { 1: "Montag", 2: "Dienstag", 3: "Mittwoch", 4: "Donnerstag", 5: "Freitag", 6: "Samstag", 7: "Sonntag"}
     if datetime.datetime.now().isoweekday() == 5 and datetime.datetime.now().hour == 20:
         return "Heute ist Freitag, es gibt keine Stunden mehr. Schönes Wochenende!"
     elif datetime.datetime.now().isoweekday() == 6:
         return ""
-    elif when == "today":
-        ausfall = "Heute entfallen folgende Stunden:\n"
-    elif when == "tomorrow":
-        ausfall = "Morgen entfallen folgende Stunden:\n"
     else:
-        return "Error: Invalid argument"
+        ausfall = "Morgen entfallen folgende Stunden:\n"
 
-    with open("timetable.json", "r") as file:
+    with open(f"{datetime.date.today() + datetime.timedelta(days=1)}.json", "r") as file:
         timetable = json.load(file)
     with open("subjects.json", "r") as file:
         subjects = json.load(file)
@@ -128,51 +124,31 @@ def create_message(when):
 
     return ausfall
 
-def create_message_extended(when) -> str:
+
+def create_message_extended():
     hours = {750: "1.", 840: "2.", 940: "3.", 1030: "4.", 1130: "5.", 1220: "6.", 1335: "7.", 1415: "8.", 1505: "9.", 1545: "10.", 1625: "11.", 1705: "12."}
-    with open("timetable.json", "r") as file:
-        timetable = json.load(file)
+    ausfall = "Heute entfallen folgende Stunden:\n"
+    try:
+        with open(f"{datetime.date.today()}.json", "r") as file:
+            timetable = json.load(file)
+    except FileNotFoundError:
+        return "Keine Stunden entfallen"
+
     with open("subjects.json", "r") as file:
         subjects = json.load(file)
+
     with open("teachers.json", "r") as file:
         teachers = json.load(file)
-    with open("archive.json", "r") as file:
-        archive = json.load(file)
-    if timetable['expand'] == "True":
-        if datetime.datetime.now().isoweekday() == 5 and datetime.datetime.now().hour == 20:
-            return "Heute ist Freitag, es gibt keine Stunden mehr. Schönes Wochenende!"
-        elif datetime.datetime.now().isoweekday() == 6:
-            return ""
-        elif when == "today":
-            ausfall = "Heute entfallen folgende Stunden:\n"
-        elif when == "tomorrow":
-            ausfall = "Morgen entfallen folgende Stunden:\n"
-        else:
-            return "Error: Invalid argument"
 
+    for lesson in timetable:
+        lessonname = subjects[str(timetable[lesson]['su'][0]['id'])]
+        date = timetable[lesson]['startTime']
+        ausfall += f"{lessonname} bei {teachers[lessonname]} in der {hours[date]} Stunde\n"
 
+    if ausfall == "Heute entfallen folgende Stunden:\n":
+        return "Heute entfallen keine Stunden"
     else:
-        if datetime.datetime.now().isoweekday() == 5 and datetime.datetime.now().hour == 20:
-            return "Heute ist Freitag, es gibt keine Stunden mehr. Schönes Wochenende!"
-        elif datetime.datetime.now().isoweekday() == 6:
-            return ""
-        elif when == "today":
-            ausfall = "Heute entfallen folgende Stunden:\n"
-        elif when == "tomorrow":
-            ausfall = "Morgen entfallen folgende Stunden:\n"
-        else:
-            return "Error: Invalid argument"
-
-        with open("archive.json", "a") as file:
-            for lesson in timetable:
-                lessonname = subjects[str(timetable[lesson]['su'][0]['id'])]
-                date = timetable[lesson]['startTime']
-                ausfall += f"{lessonname} bei {teachers[lessonname]} in der {hours[date]} Stunde\n"
-                archive.append
-        if ausfall == "Heute entfallen folgende Stunden:\n" or ausfall == "Morgen entfallen folgende Stunden:\n":
-            ausfall += "Keine"
-
-    return ausfall
+        return ausfall
 
 def send_telegram(message: str):
     if message == "":
@@ -189,23 +165,6 @@ def send_telegram(message: str):
         logging.log(level=logging.ERROR, msg="Message not sent to telegram")
         logging.log(level=logging.ERROR, msg="Error message: " + str(req_resp['description']))
 
-def waittimedefine():
-    current_time = datetime.datetime.now()
-    target_time = None
-
-    # Check if current time is between 7 am and 8 am
-    if current_time.hour >= 7 and current_time.hour < 8:
-        target_time = current_time.replace(minute=current_time.minute//5*5+5, second=0, microsecond=0)
-    elif current_time.hour < 20:
-        target_time = current_time.replace(hour=20, minute=0, second=0, microsecond=0)
-    else:
-        # Calculate target time for tomorrow at 7 am
-        tomorrow = current_time + datetime.timedelta(days=1)
-        target_time = tomorrow.replace(hour=7, minute=0, second=0, microsecond=0)
-
-    wait_time = (target_time - current_time).total_seconds()
-    return wait_time
-
 
 def do_send(sess, when):
     l = sess.login()
@@ -215,11 +174,32 @@ def do_send(sess, when):
         return
     sess.get_timetable(when)
     sess.logout()
-    message = create_message(when)
+    message = create_message()
 
-    send_telegram(message)
+    if type(message) == str:
+        send_telegram(message)
+    else:
+        return message
 
 def do_extension(sess, when):
+    sess.get_timetable(when)
+    sess.logout()
+    message = create_message_extended()
+    if type(message) == list:
+        send_telegram(message)
+    else:
+        return message
+
+
+def main():
+    reqenvvars = ["TELEGRAM_API_TOKEN", "CHAT_ID", "UNTIS_USER", "UNTIS_PASSWORD", "SCHOOL", "CLASS_ID", "URL", "USERAGENT", "CRONTAB_URL"]
+    for i in reqenvvars:
+        if i not in os.environ:
+            logging.log(level=logging.ERROR, msg=f"Environment variable {i} not set")
+            exit(f"Environment variable {i} not set")
+    # obgligated initialisations
+    sess = UntisSess()
+
     l = None
     for i in range(3):
         l = sess.login()
@@ -233,43 +213,37 @@ def do_extension(sess, when):
     if l == "Error" or l == None:
         logging.log(level=logging.ERROR, msg=f"Error while logging in. Value of l = {l}")
         return
-    sess.get_timetable(when)
-    sess.logout()
-    message = create_message_extended(when)
-    send_telegram(message)
 
-def main():
-    reqenvvars = ["TELEGRAM_API_TOKEN", "CHAT_ID", "UNTIS_USER", "UNTIS_PASSWORD", "SCHOOL", "CLASS_ID", "URL", "USERAGENT"]
-    for i in reqenvvars:
-        if i not in os.environ:
-            logging.log(level=logging.ERROR, msg=f"Environment variable {i} not set")
-            exit(f"Environment variable {i} not set")
-    # obgligated initialisations
-    sess = UntisSess()
     sess.get_subjects()
 
-    while True:
-        now = datetime.datetime.now()
+    now = datetime.datetime.now()
 
-        if now.isoweekday() == 6 or (now.isoweekday() == 7 and now.hour < 19):
-            pass
+    if now.isoweekday() == 6 or (now.isoweekday() == 7 and now.hour < 19):
+        pass
 
-        elif now.isoweekday() == 7 and now.hour > 20:
-            do_send(sess, "tomorrow")
+    elif now.isoweekday() == 7 and now.hour > 20:
+        res = do_send(sess, "tomorrow")
 
-        elif now.hour == 7:
-            do_extension(sess, "today")
+    elif now.hour == 7:
+        res = do_extension(sess, "today")
 
-        else:
-            do_send(sess, "tomorrow")
+    else:
+        do_send(sess, "tomorrow")
 
-        waittime = waittimedefine()
-        logging.log(level=logging.INFO, msg=f"Waiting {waittime} seconds")
-        sleep(waittime)
+    return "Success"
+
+def sendsuccess():
+    if get(str(os.getenv("CRONTAB_URL"))).status_code == 200:
+        logging.log(level=logging.INFO, msg="Success message sent to status.liep.live")
+    else:
+        logging.log(level=logging.ERROR, msg="Error while sending success message to status.liep.live")
 
 if __name__ == "__main__":
     dotenv.load_dotenv()
     logging.basicConfig(filename='untis_ms.log', filemode="a", level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
-    main()
+    res = main()
+    if res == "Success":
+        sendsuccess()
 
-
+    else:
+        logging.log(level=logging.ERROR, msg="Error while running: " + str(res))
