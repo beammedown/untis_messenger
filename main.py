@@ -20,8 +20,9 @@ class UntisSess():
                 useragent=os.getenv("USERAGENT")
             ).login()
 
-            if os.getenv("CLASS_ID") != None:
-                self.klasse = int(os.getenv("CLASS_ID")) # type: ignore
+            class_id = os.getenv("CLASS_ID")
+            if class_id is not None:
+                self.klasse = int(class_id)
             else:
                 exit("Error: No class id specified | set in .env to continue | exiting...")
 
@@ -48,7 +49,7 @@ class UntisSess():
                 with open("timetable.json", "w") as f:
                         f.write("{\n")
                         f.write(f'  "expand": "{True if datetime.datetime.now().hour == 7 else False}",\n')
-                        for j, i in enumerate(timetable): # type: ignore
+                        for j, i in enumerate(list(timetable)): # type: ignore
                             if i.code == "cancelled":
                                 if j not in written:
                                     f.write(f'  "{j}":'+str(i).replace("'",'"')+",\n")
@@ -66,7 +67,7 @@ class UntisSess():
                 timetable = self.s.timetable(klasse=self.klasse, start=datetime.date.today()+datetime.timedelta(1), end=datetime.date.today()+datetime.timedelta(1))
                 with open("timetable.json", "w") as f:
                         f.write("{\n")
-                        for j, i in enumerate(timetable): # type: ignore
+                        for j, i in enumerate(list(timetable)): # type: ignore
                             if i.code == "cancelled":
                                 if j not in written:
                                     f.write(f'  "{j}":'+str(i).replace("'",'"')+",\n")
@@ -206,6 +207,30 @@ def waittimedefine():
     wait_time = (target_time - current_time).total_seconds()
     return wait_time
 
+def send_ntfsh(message: str):
+    if message == "":
+        logging.log(level=logging.INFO, msg="No message to send")
+        return
+    
+    url = os.getenv("NTFY_URL")
+    if url is not None:
+        req_resp = post(
+            url=url,
+            json=message
+        )
+        try:
+            if req_resp.status_code == 200:
+                logging.log(level=logging.INFO, msg="Message sent to ntfs.h")
+            else:
+                logging.log(level=logging.ERROR, msg="Message not sent to ntfs.h")
+                logging.log(level=logging.ERROR, msg="Error message: " + str(req_resp.json()['error']))
+        except:
+            logging.log(level=logging.ERROR, msg="Message not sent to ntfs.h")
+            logging.log(level=logging.ERROR, msg="Error message: " + str(req_resp.json()['error']))
+    else:
+        logging.log(level=logging.ERROR, msg="Error while sending message to ntfs.h: No URL specified")
+        return
+
 
 def do_send(sess, when):
     l = sess.login()
@@ -217,7 +242,7 @@ def do_send(sess, when):
     sess.logout()
     message = create_message(when)
 
-    send_telegram(message)
+    send_ntfsh(message)
 
 def do_extension(sess, when):
     l = None
@@ -239,11 +264,12 @@ def do_extension(sess, when):
     send_telegram(message)
 
 def main():
-    reqenvvars = ["TELEGRAM_API_TOKEN", "CHAT_ID", "UNTIS_USER", "UNTIS_PASSWORD", "SCHOOL", "CLASS_ID", "URL", "USERAGENT"]
+    reqenvvars = ["UNTIS_USER", "UNTIS_PASSWORD", "SCHOOL", "CLASS_ID", "URL", "USERAGENT", "NTFY_URL"]
     for i in reqenvvars:
         if i not in os.environ:
             logging.log(level=logging.ERROR, msg=f"Environment variable {i} not set")
             exit(f"Environment variable {i} not set")
+
     # obgligated initialisations
     sess = UntisSess()
     sess.get_subjects()
