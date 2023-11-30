@@ -179,11 +179,11 @@ def send_telegram(message: str):
     if message == "":
         logging.log(level=logging.INFO, msg="No message to send")
         return
-    url = "https://api.telegram.org/bot"+os.getenv("TELEGRAM_API_TOKEN")+"/"+'sendMessage'
+    url = "https://api.telegram.org/bot{}/{}".format(os.getenv("TELEGRAM_API_TOKEN"), 'sendMessage')
     req_resp = post(
-    url='https://api.telegram.org/bot{0}/{1}'.format(os.getenv("TELEGRAM_API_TOKEN"), 'sendMessage'),
-    data={'chat_id': os.getenv("CHAT_ID"), 'text': message},
-    timeout=5
+        url=url,
+        data={'chat_id': os.getenv("CHAT_ID"), 'text': message},
+        timeout=5
     ).json()
 
     if req_resp['ok']:
@@ -247,7 +247,7 @@ def do_send(sess: UntisSess, when: str):
 
     send_ntfsh(message)
 
-def do_extension(sess, when):
+def do_extension(sess: UntisSess, when: str):
     l = None
     for _i in range(3):
         l = sess.login()
