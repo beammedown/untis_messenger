@@ -169,7 +169,7 @@ def create_message_extended(when: str) -> str:
                 lessonname = subjects[str(timetable[lesson]['su'][0]['id'])]
                 date = timetable[lesson]['startTime']
                 ausfall += f"{lessonname} bei {teachers[lessonname]} in der {hours[date]} Stunde\n"
-                archive.append
+                archive.append()
         if ausfall == "Heute entfallen folgende Stunden:\n" or ausfall == "Morgen entfallen folgende Stunden:\n":
             ausfall += "Keine"
 
@@ -179,6 +179,7 @@ def send_telegram(message: str):
     if message == "":
         logging.log(level=logging.INFO, msg="No message to send")
         return
+    url = "https://api.telegram.org/bot"+os.getenv("TELEGRAM_API_TOKEN")+"/"+'sendMessage'
     req_resp = post(
     url='https://api.telegram.org/bot{0}/{1}'.format(os.getenv("TELEGRAM_API_TOKEN"), 'sendMessage'),
     data={'chat_id': os.getenv("CHAT_ID"), 'text': message},
@@ -197,7 +198,7 @@ def waittimedefine() -> float:
 
     # Check if current time is between 7 am and 8 am
     if current_time.hour >= 7 and current_time.hour < 8:
-        target_time = current_time.replace(minute=current_time.minute//5*5+5, second=0, microsecond=0)
+        target_time = current_time.replace(hour=20, minute=0, second=0, microsecond=0)
     elif current_time.hour < 20:
         target_time = current_time.replace(hour=20, minute=0, second=0, microsecond=0)
     else:
@@ -217,7 +218,8 @@ def send_ntfsh(message: str):
     if url is not None:
         req_resp = post(
             url=url,
-            json=message
+            json=message,
+            timeout=5,
         )
         try:
             if req_resp.status_code == 200:
@@ -245,9 +247,9 @@ def do_send(sess: UntisSess, when: str):
 
     send_ntfsh(message)
 
-def do_extension(sess: UntisSess, when: str):
+def do_extension(sess, when):
     l = None
-    for i in range(3):
+    for _i in range(3):
         l = sess.login()
         if l == "Error":
             logging.log(level=logging.ERROR, msg="Error while logging in")
@@ -256,7 +258,7 @@ def do_extension(sess: UntisSess, when: str):
         else:
             break
 
-    if l == "Error" or l == None:
+    if l == "Error" or l is None:
         logging.log(level=logging.ERROR, msg=f"Error while logging in. Value of l = {l}")
         return
     sess.get_timetable(when)
@@ -265,6 +267,8 @@ def do_extension(sess: UntisSess, when: str):
     send_telegram(message)
 
 def main():
+    """The main function
+    """
     reqenvvars = ["UNTIS_USER", "UNTIS_PASSWORD", "SCHOOL", "CLASS_ID", "URL", "USERAGENT", "NTFY_URL"]
     for i in reqenvvars:
         if i not in os.environ:
