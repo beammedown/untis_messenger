@@ -32,7 +32,7 @@ class UntisSess():
 
     def get_subjects(self):
         subjects = self.s.subjects()
-        with open("subjects.json", "w") as file:
+        with open(file="subjects.json", mode="w", encoding='utf-8') as file:
             file.write("{\n")
             for lesson in subjects:
                 file.write(f'   "{lesson.id}": "{lesson.name}",\n')
@@ -41,7 +41,7 @@ class UntisSess():
         with open("subjects.json", "w") as f:
             f.write(read_data[:-2] + "\n}")
 
-    def get_timetable(self, when):
+    def get_timetable(self, when: str):
         try:
             written = []
             if when == "today":
@@ -99,7 +99,7 @@ class UntisSess():
             logging.log(level=logging.ERROR, msg="Error while logging in: " + str(e))
             return "Error"
 
-def create_message(when):
+def create_message(when: str):
     hours = {750: "1.", 840: "2.", 940: "3.", 1030: "4.", 1130: "5.", 1220: "6.", 1335: "7.", 1415: "8.", 1505: "9.", 1545: "10.", 1625: "11.", 1705: "12."}
     weekdays = { 1: "Montag", 2: "Dienstag", 3: "Mittwoch", 4: "Donnerstag", 5: "Freitag", 6: "Samstag", 7: "Sonntag"}
     if datetime.datetime.now().isoweekday() == 5 and datetime.datetime.now().hour == 20:
@@ -129,7 +129,7 @@ def create_message(when):
 
     return ausfall
 
-def create_message_extended(when) -> str:
+def create_message_extended(when: str) -> str:
     hours = {750: "1.", 840: "2.", 940: "3.", 1030: "4.", 1130: "5.", 1220: "6.", 1335: "7.", 1415: "8.", 1505: "9.", 1545: "10.", 1625: "11.", 1705: "12."}
     with open("timetable.json", "r") as file:
         timetable = json.load(file)
@@ -181,7 +181,8 @@ def send_telegram(message: str):
         return
     req_resp = post(
     url='https://api.telegram.org/bot{0}/{1}'.format(os.getenv("TELEGRAM_API_TOKEN"), 'sendMessage'),
-    data={'chat_id': os.getenv("CHAT_ID"), 'text': message}
+    data={'chat_id': os.getenv("CHAT_ID"), 'text': message},
+    timeout=5
     ).json()
 
     if req_resp['ok']:
@@ -190,7 +191,7 @@ def send_telegram(message: str):
         logging.log(level=logging.ERROR, msg="Message not sent to telegram")
         logging.log(level=logging.ERROR, msg="Error message: " + str(req_resp['description']))
 
-def waittimedefine():
+def waittimedefine() -> float:
     current_time = datetime.datetime.now()
     target_time = None
 
@@ -232,7 +233,7 @@ def send_ntfsh(message: str):
         return
 
 
-def do_send(sess, when):
+def do_send(sess: UntisSess, when: str):
     l = sess.login()
     if l == "Error":
         logging.log(level=logging.ERROR, msg="Error while logging in")
@@ -244,7 +245,7 @@ def do_send(sess, when):
 
     send_ntfsh(message)
 
-def do_extension(sess, when):
+def do_extension(sess: UntisSess, when: str):
     l = None
     for i in range(3):
         l = sess.login()
@@ -297,5 +298,3 @@ if __name__ == "__main__":
     dotenv.load_dotenv()
     logging.basicConfig(filename='untis_ms.log', filemode="a", level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
     main()
-
-
