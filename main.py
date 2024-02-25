@@ -5,7 +5,6 @@ import logging
 import os
 from time import sleep
 
-from icecream import ic
 import dotenv
 from requests import post
 from webuntis.session import Session
@@ -217,9 +216,9 @@ def send_ntfsh(message: str):
         return
     
     url = os.getenv("NTFY_URL")
-    ic(url)
+
     authstring = f'{os.getenv("NTFY_USER")}:{os.getenv("NTFY_PASSWORD")}'
-    ic(authstring)
+
     if url is not None:
         req_resp = post(
             url=url,
@@ -277,9 +276,9 @@ def do_extension(sess: UntisSess, when: str):
 def main():
     """The main function
     """
-    reqenvvars = ["UNTIS_USER", "UNTIS_PASSWORD", "SCHOOL", "CLASS_ID", "URL", "USERAGENT", "NTFY_URL"]
+    reqenvvars = ["UNTIS_USER", "UNTIS_PASSWORD", "SCHOOL", "CLASS_ID", "URL", "USERAGENT", "NTFY_URL", "NTFY_USER", "NTFY_PASSWORD"]
     for i in reqenvvars:
-        if i not in os.environ:
+        if i not in os.environ or os.getenv(i) == "":
             logging.log(level=logging.ERROR, msg=f"Environment variable {i} not set")
             exit(f"Environment variable {i} not set")
 
