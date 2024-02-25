@@ -1,9 +1,11 @@
+from base64 import b64encode
 import datetime
 import json
 import logging
 import os
 from time import sleep
 
+from icecream import ic
 import dotenv
 from requests import post
 from webuntis.session import Session
@@ -215,23 +217,29 @@ def send_ntfsh(message: str):
         return
     
     url = os.getenv("NTFY_URL")
+    ic(url)
+    authstring = f'{os.getenv("NTFY_USER")}:{os.getenv("NTFY_PASSWORD")}'
+    ic(authstring)
     if url is not None:
         req_resp = post(
             url=url,
-            json=message,
+            data=message,
+            headers={
+                "Authorization": "Basic {}".format(b64encode(authstring.encode("utf-8")).decode("utf-8"))
+                },
             timeout=5,
         )
         try:
             if req_resp.status_code == 200:
-                logging.log(level=logging.INFO, msg="Message sent to ntfs.h")
+                logging.log(level=logging.INFO, msg="Message sent to ntfy.sh")
             else:
-                logging.log(level=logging.ERROR, msg="Message not sent to ntfs.h")
+                logging.log(level=logging.ERROR, msg="Message not sent to ntfy.sh")
                 logging.log(level=logging.ERROR, msg="Error message: " + str(req_resp.json()['error']))
         except:
-            logging.log(level=logging.ERROR, msg="Message not sent to ntfs.h")
+            logging.log(level=logging.ERROR, msg="Message not sent to ntfy.sh")
             logging.log(level=logging.ERROR, msg="Error message: " + str(req_resp.json()['error']))
     else:
-        logging.log(level=logging.ERROR, msg="Error while sending message to ntfs.h: No URL specified")
+        logging.log(level=logging.ERROR, msg="Error while sending message to ntfy.sh: No URL specified")
         return
 
 
@@ -281,7 +289,7 @@ def main():
 
     while True:
         now = datetime.datetime.now()
-
+        do_send(sess, "tomorrow")
         if now.isoweekday() == 6 or (now.isoweekday() == 7 and now.hour < 19):
             pass
 
